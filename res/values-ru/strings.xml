@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Фото дня</string>
+    <string name="wallpaper_description">Обои с изображением фотографий дня с сайта http://fotki.yandex.ru/</string>
+    <string name="download">Загрузка фотографии...</string>
+</resources>
