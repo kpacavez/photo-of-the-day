@@ -110,7 +110,7 @@ public class Wallpaper extends WallpaperService
 			}
 			
 			String number = ite.child(0).text();
-			if(new Date().getDate() != Integer.parseInt(number))
+			if(GetBitmap() != null && new Date().getDate() != Integer.parseInt(number))
 			{
 				continue;
 			}
