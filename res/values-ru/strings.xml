@@ -3,4 +3,6 @@
     <string name="app_name">Фото дня</string>
     <string name="wallpaper_description">Обои с изображением Фото дня с сервиса Яндекс.Фотки</string>
     <string name="download">Загрузка фотографии...</string>
+    <string name="error">Ошибка!</string>
+    <string name="isOffline">Передача данных отключена.</string>
 </resources>
