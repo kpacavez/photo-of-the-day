@@ -18,12 +18,13 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.Paint.Align;
+import android.graphics.Rect;
 import android.net.ConnectivityManager;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -47,15 +48,7 @@ public class Wallpaper extends WallpaperService
 		// настройки
 		preferences = getSharedPreferences(Constants.SETTINGS_NAME, 0);
 		
-		//long lastUpdate = preferences.getLong(Constants.LAST_UPDATE, 0);
-		
 		ReadFile();
-		//Date lastUpdateDate = new Date(lastUpdate);
-		//Date currentDate = new Date(System.currentTimeMillis());
-		//if(lastUpdateDate.getDate() == currentDate.getDate())
-		//{
-		//	ReadFile();
-		//}
 	}
 
 	@Override
@@ -78,8 +71,11 @@ public class Wallpaper extends WallpaperService
 	
 	public void SetCurrentDay(int value)
 	{
+		// для отладки обновления
+		//value -= 1;
+		
+		Log.d(TAG, String.format("Текущее число: %d", value));
 		currDay = value;
-		//Log.d(TAG, String.format("Текущее число %d", currDay));
 	}
 	
 	public int GetCurrentDay()
@@ -87,7 +83,18 @@ public class Wallpaper extends WallpaperService
 		return currDay;
 	}
 	
-	public boolean isOnline() 
+	public void SetCurrentUrl(String value)
+	{
+		Log.d(TAG, String.format("Текущий URL: %s", value));
+		currentUrl = value;
+	}
+	
+	public String GetCurrentUrl()
+	{
+		return currentUrl;
+	}
+	
+	public boolean IsOnline() 
 	{
 		//Log.d(TAG, "Вызов isOnline()");
 		
@@ -105,7 +112,7 @@ public class Wallpaper extends WallpaperService
 	
 	public String GetUrl() throws IOException
     {
-		//Log.d(TAG, "Получение URL картинки");
+		Log.d(TAG, "Получение URL картинки");
 		
     	String url = null;
         String str;
@@ -120,12 +127,6 @@ public class Wallpaper extends WallpaperService
 			{
 				continue;
 			}
-			
-			//String number = ite.child(0).text();
-			//if(GetBitmap() != null && new Date().getDate() != Integer.parseInt(number))
-			//{
-			//	continue;
-			//}
 			
 			Element href = ite.select("a[href]").first();
 			Element src = ite.select("img[src]").first();
@@ -143,7 +144,7 @@ public class Wallpaper extends WallpaperService
 	
 	public void ReadFile()
 	{
-		//Log.d(TAG, "Чтение картинки из файла");
+		Log.d(TAG, "Чтение картинки из файла");
 		
 		FileInputStream stream = null;
 		try 
@@ -151,13 +152,13 @@ public class Wallpaper extends WallpaperService
 			stream = openFileInput(Constants.FILE_NAME);
 			bm = BitmapFactory.decodeStream(stream);
 			
-			//Log.d(TAG, "Считана картинка из файла");
+			Log.d(TAG, "Считана картинка из файла");
 			
-			currentUrl = preferences.getString(Constants.LAST_URL, "");
+			SetCurrentUrl(preferences.getString(Constants.LAST_URL, ""));
 			SetCurrentDay(new Date(preferences.getLong(Constants.LAST_UPDATE, 0)).getDate());
 				
 		} catch (FileNotFoundException e) {
-			//Log.d(TAG, "Файл картинки не найден");
+			Log.d(TAG, "Файл картинки не найден");
 		}
 		finally {
             if (stream != null) try {
@@ -169,23 +170,26 @@ public class Wallpaper extends WallpaperService
 	
 	public void SaveFile(Bitmap bm, String url)
 	{
-		//Log.d(TAG, "Сохранение картинки в файл");
+		Log.d(TAG, "Сохранение картинки в файл");
 		try 
 		{
 			FileOutputStream fos = openFileOutput(Constants.FILE_NAME, Context.MODE_PRIVATE);
 			bm.compress(Bitmap.CompressFormat.PNG, 100, fos);
 			fos.close();
 			
+			long now = System.currentTimeMillis(); 
+			
 			// сохранение времени последнего обновления
             SharedPreferences.Editor editor = preferences.edit();
-            editor.putLong(Constants.LAST_UPDATE, System.currentTimeMillis());
+            editor.putLong(Constants.LAST_UPDATE, now);
             editor.putString(Constants.LAST_URL, url);
             editor.commit();
             
-            SetCurrentDay(new Date().getDate());
+            SetCurrentDay(new Date(now).getDate());
+            SetCurrentUrl(url);
 
 		} catch (IOException e) {
-			//Log.d(TAG, "Ошибка сохранения картинки");
+			Log.d(TAG, "Ошибка сохранения картинки");
 		}
 	}
 	
@@ -216,7 +220,6 @@ public class Wallpaper extends WallpaperService
         MyEngine(Wallpaper service) 
         {
         	//Log.d(TAG, "Создание MyEngine");
-        	
         	final Paint paint = mPaint;
             paint.setColor(0xffffffff);
             paint.setTextSize(30);
@@ -237,15 +240,16 @@ public class Wallpaper extends WallpaperService
     			@Override
     			public void run() 
     			{
-    				//Log.d(TAG, "Сработал таймер обновления");
-    				if(wp.GetCurrentDay() != new Date().getDate())
+    				Log.d(TAG, "Сработал таймер обновления");
+    				int now = new Date(System.currentTimeMillis()).getDate();
+    				if(wp.GetCurrentDay() != now)
     				{
-    					//Log.d(TAG, "Запуск обновления");
+    					Log.d(TAG, "Запуск обновления");
     					update();
     				}
     				else
     				{
-    					//Log.d(TAG, "Обновление не нужно");
+    					Log.d(TAG, String.format("Обновление не нужно. Сейчас: %d, текущий: %d", now, wp.GetCurrentDay()));
     				}
     			}
     			
@@ -263,16 +267,17 @@ public class Wallpaper extends WallpaperService
     			@Override
     			public void run() 
     			{
-    				//Log.d(TAG, "Запуск проверки соединения");
-    				if(isOnline() == false)
+    				Log.d(TAG, "Запуск проверки соединения");
+    				if(IsOnline() == false)
     				{
+    					Log.d(TAG, "Передача данных отключена");
     					return;
     				}
     				
-    				//Log.d(TAG, "Остановка таймера проверки соединения");
+    				Log.d(TAG, "Передача данных включена. Остановка таймера проверки соединения");
     				isOnlineChecker.cancel();
     				
-    				//Log.d(TAG, "Запуск обновления");
+    				Log.d(TAG, "Запуск обновления");
     				update();
     			}
     			
@@ -283,13 +288,13 @@ public class Wallpaper extends WallpaperService
        
         public void update()
         {
-        	//Log.d(TAG, "Вызов MyEngine.update()");
+        	Log.d(TAG, "Вызов MyEngine.update()");
         	
         	try 
 	    	{
-        		if(isOnline() == false)
+        		if(IsOnline() == false)
         		{
-        			//Log.d(TAG, "Нет интернет соединения. Запуск проверяльщика");
+        			Log.d(TAG, "Нет интернет соединения. Запуск проверяльщика");
         			CheckOnline();
         			return;
         		}
@@ -297,28 +302,28 @@ public class Wallpaper extends WallpaperService
             	String url = GetUrl();
             	if(url == null)
             	{
-            		//Log.d(TAG, "Ошибка получения URL картинки");
+            		Log.d(TAG, "Ошибка получения URL картинки");
             		CheckOnline();
             		return;
             	}
             	
             	url = url.substring(0,url.length() - 3) + "L";
-            	if(currentUrl == url)
+            	if(GetCurrentUrl() == url)
             	{
-            		//Log.d(TAG, "URL совпадает, еще не обновили");
+            		Log.d(TAG, "URL совпадает, еще не обновили");
             		return;
             	}
             	
-            	//Log.d(TAG, "Загрузка картинки по адресу: " + url);
+            	Log.d(TAG, "Загрузка картинки по адресу: " + url);
             	Bitmap bm = imageDownloader.downloadBitmap(url);
             	if(bm == null)
             	{
-            		//Log.d(TAG, "Ошибка загрузки киртинки");
+            		Log.d(TAG, "Ошибка загрузки киртинки");
             		CheckOnline();
             		return;
             	}
             	
-        		//Log.d(TAG, "Картинка успешно загружена");
+        		Log.d(TAG, "Картинка успешно загружена");
         		currentHeight = -1;
         		currentWidth = -1;
         		wp.SetBitmap(bm);
@@ -326,10 +331,10 @@ public class Wallpaper extends WallpaperService
         		drawFrame();
 	    	} 
 		    catch (IOException e) {
-		    	//Log.d(TAG, "Ошибка получения URL: " + e.getLocalizedMessage());
+		    	Log.d(TAG, "Ошибка получения URL: " + e.getLocalizedMessage());
 			}
 		    catch(Exception e) {
-		    	//Log.d(TAG, "Ошибка обновления: " + e.getLocalizedMessage());
+		    	Log.d(TAG, "Ошибка обновления: " + e.getLocalizedMessage());
 		    }
         }
 
@@ -424,7 +429,7 @@ public class Wallpaper extends WallpaperService
                 		int offset = (mHeight / 2) - (width / 2);
                 		c.drawRect(new Rect(0, 0, mWidth, mHeight), new Paint());
                 		c.drawBitmap(Bitmap.createScaledBitmap(download, (int)(download.getWidth() * rescaling), (int)(download.getHeight() * rescaling), true) , 0, offset, null);
-                		if(isOnline())
+                		if(IsOnline())
                 		{
                 			c.drawText(getText(R.string.download).toString(), mWidth / 2, 100, mPaint);
                 		}
@@ -499,93 +504,4 @@ public class Wallpaper extends WallpaperService
         	}
         }
 	}
-/*
-	private class LongOperation extends AsyncTask<String, Integer, String> 
-    {
-    	private final int count = 30;
-    	private final ProgressDialog dialog = new ProgressDialog(Wallpaper.this);
-    	
-    	@Override
-	    protected void onPreExecute() 
-	    {
-    		dialog.setMessage("Inserting data...");
-    		dialog.show();
-	    }
-    	
-	    @Override
-	    protected String doInBackground(String... params) 
-	    {
-	    	try 
-	    	{
-	    		return GetUrl();
-	    	} 
-		    catch (IOException e) {
-				e.printStackTrace();
-			}
-		    catch(Exception e) {
-		    	e.printStackTrace();
-		    }
-	    	
-	    	return null; 
-	    }
-	 
-	    @Override
-		protected void onPostExecute(String result) 
-	    {
-	    	if (dialog.isShowing()) 
-	    	{
-	            dialog.dismiss();
-	        }
-	    	
-	    	if(result == null)
-	    	{
-	    		return;
-	    	}
-	    	
-	    	new DownloadImage().execute(result);
-		}
-	 
-	    @Override
-	    protected void onProgressUpdate(Integer... progress) 
-	    {
-	    	dialog.setProgress(progress[0]);
-	    }
-    }
-*/
-/*	
-    private class DownloadImage extends AsyncTask<String, Integer, Bitmap> 
-    {
-    	private final ProgressDialog dialog = new ProgressDialog(Wallpaper.this);
-    	
-    	@Override
-	    protected void onPreExecute() 
-	    {
-    		dialog.setMessage("Download image...");
-    		dialog.show();
-	    }
-    	
-	    @Override
-	    protected Bitmap doInBackground(String... params) 
-	    {	  
-	    	return imageDownloader.downloadBitmap(params[0]);
-	    }
-	 
-	    @Override
-		protected void onPostExecute(Bitmap result) 
-	    {
-	    	if (dialog.isShowing()) 
-	    	{
-	            dialog.dismiss();
-	        }
-	    
-	    	Wallpaper.this.SetBitmap(result);
-		}
-	 
-	    @Override
-	    protected void onProgressUpdate(Integer... progress) 
-	    {
-	    	dialog.setProgress(progress[0]);
-	    }
-    }
-    */
 }
