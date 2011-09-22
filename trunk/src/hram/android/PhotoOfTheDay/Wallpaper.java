@@ -1,5 +1,9 @@
 package hram.android.PhotoOfTheDay;
 
+import hram.android.PhotoOfTheDay.Parsers.BaseParser;
+import hram.android.PhotoOfTheDay.Parsers.Flickr;
+import hram.android.PhotoOfTheDay.Parsers.Yandex;
+
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -7,10 +11,8 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -39,6 +41,9 @@ public class Wallpaper extends WallpaperService
 	private Bitmap bm;
 	private SharedPreferences preferences;
 	private String currentUrl;
+	private BaseParser parser;
+	private int currentParser = -1;
+	Lock l = new ReentrantLock();
 	
 	@Override
 	public void onCreate() 
@@ -47,6 +52,8 @@ public class Wallpaper extends WallpaperService
 		
 		// настройки
 		preferences = getSharedPreferences(Constants.SETTINGS_NAME, 0);
+		
+		SetCurrentParser(Integer.decode(preferences.getString(Constants.SOURCES_NAME, "1")));
 		
 		ReadFile();
 	}
@@ -114,33 +121,45 @@ public class Wallpaper extends WallpaperService
     {
 		Log.d(TAG, "Получение URL картинки");
 		
-    	String url = null;
-        String str;
-        
-        Document doc = Jsoup.connect("http://fotki.yandex.ru/calendar").get();
-			
-		Element table = doc.select("table[class=photos]").first();
-		for(Element ite: table.select("td"))
-		{
-			str = ite.toString();
-			if(str == null || ite.childNodes().size() == 0)
-			{
-				continue;
-			}
-			
-			Element href = ite.select("a[href]").first();
-			Element src = ite.select("img[src]").first();
-			if(href == null || src == null)
-			{
-				continue;
-			}
-			
-			str = href.attr("href");
-			url = src.attr("src");
+		return parser.GetUrl();
+    }
+	
+	public boolean SetCurrentParser(int value)
+	{
+		l.lock();
+	    try 
+	    {
+	    	if(currentParser == value)
+	 		{
+	 			return false;
+	 		}
+	    	
+	    } finally {
+	    	currentParser = value;
+	        l.unlock();
+	    }
+		
+		switch (value) {
+		case 1:
+			Log.d(TAG, "Создание парсера Yandex");
+			parser = new Yandex();
+			break;
+		case 2:
+			Log.d(TAG, "Создание парсера Flickr");
+			parser = new Flickr();
+			break;
+		default:
+			Log.d(TAG, "Создание парсера по умолчанию");
+			parser = new Yandex();
+			break;
 		}
 		
-		return url;
-    }
+		currentParser = value;
+		SetBitmap(null);
+		currDay = -1;
+		currentUrl = null;
+		return true;
+	}
 	
 	public void ReadFile()
 	{
@@ -156,6 +175,7 @@ public class Wallpaper extends WallpaperService
 			
 			SetCurrentUrl(preferences.getString(Constants.LAST_URL, ""));
 			SetCurrentDay(new Date(preferences.getLong(Constants.LAST_UPDATE, 0)).getDate());
+			
 				
 		} catch (FileNotFoundException e) {
 			Log.d(TAG, "Файл картинки не найден");
@@ -193,7 +213,7 @@ public class Wallpaper extends WallpaperService
 		}
 	}
 	
-	class MyEngine extends Engine 
+	class MyEngine extends Engine implements SharedPreferences.OnSharedPreferenceChangeListener
 	{
 		private final Paint mPaint = new Paint();
         private int mPixels;
@@ -208,6 +228,7 @@ public class Wallpaper extends WallpaperService
         //private Rect mRectFrame;
         private boolean mHorizontal;
         private Bitmap download;
+        private SharedPreferences preferences;
 
         private final Runnable drawRunner = new Runnable() {
             public void run() {
@@ -225,6 +246,9 @@ public class Wallpaper extends WallpaperService
             paint.setTextSize(30);
             paint.setAntiAlias(true);
             paint.setTextAlign(Align.CENTER);
+            
+            preferences = Wallpaper.this.getSharedPreferences(Constants.SETTINGS_NAME, 0);
+            preferences.registerOnSharedPreferenceChangeListener(this);
             
         	wp = service;
         	download = BitmapFactory.decodeResource(getResources(),  R.drawable.download);
@@ -307,8 +331,7 @@ public class Wallpaper extends WallpaperService
             		return;
             	}
             	
-            	url = url.substring(0,url.length() - 3) + "L";
-            	if(GetCurrentUrl() == url)
+            	if(url.equals(GetCurrentUrl()))
             	{
             		Log.d(TAG, "URL совпадает, еще не обновили");
             		return;
@@ -349,9 +372,13 @@ public class Wallpaper extends WallpaperService
         @Override
         public void onDestroy() 
         {
-            super.onDestroy();
-            timer.cancel();
+        	timer.cancel();
             mHandler.removeCallbacks(drawRunner);
+        	if(preferences != null)
+        	{
+        		preferences.unregisterOnSharedPreferenceChangeListener(this);
+        	}
+            super.onDestroy();
         }
 
         @Override
@@ -503,5 +530,24 @@ public class Wallpaper extends WallpaperService
         	    mHorizontal = true;
         	}
         }
+
+		@Override
+		public void onSharedPreferenceChanged(SharedPreferences prefs, String arg1) 
+		{
+			if(arg1.equals("sources"))
+			{
+				String value = prefs.getString("sources", "0");
+				Log.d(TAG, "Настройки изменились значение: " + value);
+			
+				if(SetCurrentParser(Integer.decode(value)))
+				{
+					new Thread(new Runnable() {
+					    public void run() {
+					    	update();
+					    }
+					  }).start();
+				}
+			}
+		}
 	}
 }
