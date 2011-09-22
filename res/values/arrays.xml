@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+	<string-array name="sourcesArray">
+        <item>fotki.yandex.ru</item>
+        <item>flickr.com</item>
+    </string-array>
+
+    <string-array name="sourcesValues">
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+    
+</resources>

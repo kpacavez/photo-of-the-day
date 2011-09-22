@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen
+  xmlns:android="http://schemas.android.com/apk/res/android">
+       <ListPreference android:key="sources" 
+       	android:title="@string/sources" 
+       	android:summary="@string/sourcesSummary" 
+       	android:entries="@array/sourcesArray" 
+       	android:entryValues="@array/sourcesValues"
+       	android:defaultValue="1">
+       </ListPreference>
+    
+</PreferenceScreen>

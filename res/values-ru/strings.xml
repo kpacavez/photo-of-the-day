@@ -5,4 +5,6 @@
     <string name="download">Загрузка фотографии...</string>
     <string name="error">Ошибка!</string>
     <string name="isOffline">Передача данных отключена.</string>
+    <string name="sources">Источники обоев</string>
+    <string name="sourcesSummary">Выберите один из источников обоев</string>
 </resources>
