@@ -1,5 +1,6 @@
 package hram.android.PhotoOfTheDay;
 
+import hram.android.PhotoOfTheDay.Exceptions.ConnectionException;
 import hram.android.PhotoOfTheDay.Parsers.BaseParser;
 import hram.android.PhotoOfTheDay.Parsers.Flickr;
 import hram.android.PhotoOfTheDay.Parsers.Yandex;
@@ -8,7 +9,9 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.locks.Lock;
@@ -37,18 +40,22 @@ public class Wallpaper extends WallpaperService
 	public static final String TAG = "Wallpaper";
 	private final Handler mHandler = new Handler();
 	private final ImageDownloader imageDownloader = new ImageDownloader();
+	private List<MyEngine> engines = new ArrayList<MyEngine>();
+	private Lock l = new ReentrantLock();
+	
 	private int currDay = -1;
 	private Bitmap bm;
 	private SharedPreferences preferences;
 	private String currentUrl;
 	private BaseParser parser;
 	private int currentParser = -1;
-	Lock l = new ReentrantLock();
+	private int currentHeight = -1;
+    private int currentWidth = -1;
 	
 	@Override
 	public void onCreate() 
 	{
-		//Log.d(TAG, "Создание сервиса.");
+		//Log.i(TAG, "Создание сервиса.");
 		
 		// настройки
 		preferences = getSharedPreferences(Constants.SETTINGS_NAME, 0);
@@ -57,50 +64,102 @@ public class Wallpaper extends WallpaperService
 		
 		ReadFile();
 	}
+	
+	@Override
+	public void onDestroy()
+	{
+		//Log.i(TAG, "Удаление сервиса.");
+	}
 
 	@Override
 	public Engine onCreateEngine() 
 	{
-		//Log.d(TAG, "WallpaperService started.");
 		return new MyEngine(this);
 	}
 	
-	public Bitmap GetBitmap()
+	/**
+	 * Регистрирует рисовальщик, добавляет в список, 
+	 * после обновления фото рисовальщики оповещаются из этого списка
+	 * @param object
+	 */
+	public void RegEngine(MyEngine object)
 	{
-		return bm;
+		engines.add(object);
 	}
 	
+	/**
+	 * Отменяет регистрацию рисовальщика
+	 * @param object
+	 */
+	public void UnregEngine(MyEngine object)
+	{
+		engines.remove(object);
+	}
+	
+	/**
+	 * Сохраняет указатель на картинку
+	 * @param value
+	 */
 	public void SetBitmap(Bitmap value)
 	{
 		//Log.d(TAG, "Сохранение указателя картинки");
 		bm = value;
 	}
 	
+	/**
+	 * Возвращает указатель на картинку
+	 * @return
+	 */
+	public Bitmap GetBitmap()
+	{
+		return bm;
+	}
+	
+	/**
+	 * Сохраняет текущий день
+	 * @param value
+	 */
 	public void SetCurrentDay(int value)
 	{
 		// для отладки обновления
 		//value -= 1;
 		
-		Log.d(TAG, String.format("Текущее число: %d", value));
+		//Log.d(TAG, String.format("Текущее число: %d", value));
 		currDay = value;
 	}
 	
+	/**
+	 * Возвращает текущий день
+	 * @return
+	 */
 	public int GetCurrentDay()
 	{
 		return currDay;
 	}
 	
+	/**
+	 * Сохраняет URL текущей картинки
+	 * @param value
+	 */
 	public void SetCurrentUrl(String value)
 	{
-		Log.d(TAG, String.format("Текущий URL: %s", value));
+		//Log.d(TAG, String.format("Текущий URL: %s", value));
 		currentUrl = value;
 	}
 	
+	/**
+	 * Возвращает URL текущей картинки
+	 * @return
+	 */
 	public String GetCurrentUrl()
 	{
 		return currentUrl;
 	}
 	
+	/**
+	 * Возвращает статус услуги передачи данных
+	 * @return
+	 */
 	public boolean IsOnline() 
 	{
 		//Log.d(TAG, "Вызов isOnline()");
@@ -117,13 +176,23 @@ public class Wallpaper extends WallpaperService
 		return false;
 	}
 	
+	/**
+	 * Возвращает урл картинки дня
+	 * @return
+	 * @throws IOException
+	 */
 	public String GetUrl() throws IOException
     {
-		Log.d(TAG, "Получение URL картинки");
+		//Log.d(TAG, "Получение URL картинки");
 		
 		return parser.GetUrl();
     }
 	
+	/**
+	 * Создает экземпляр выбранного парсера
+	 * @param value номер парсера
+	 * @return
+	 */
 	public boolean SetCurrentParser(int value)
 	{
 		l.lock();
@@ -133,52 +202,64 @@ public class Wallpaper extends WallpaperService
 	 		{
 	 			return false;
 	 		}
+	    	currentParser = value;
 	    	
 	    } finally {
-	    	currentParser = value;
 	        l.unlock();
 	    }
 		
 		switch (value) {
 		case 1:
-			Log.d(TAG, "Создание парсера Yandex");
 			parser = new Yandex();
 			break;
 		case 2:
-			Log.d(TAG, "Создание парсера Flickr");
 			parser = new Flickr();
 			break;
 		default:
-			Log.d(TAG, "Создание парсера по умолчанию");
+			//Log.i(TAG, "Создание парсера по умолчанию");
 			parser = new Yandex();
 			break;
 		}
 		
-		currentParser = value;
-		SetBitmap(null);
-		currDay = -1;
-		currentUrl = null;
+		ResetBitmap();
 		return true;
 	}
 	
+	/**
+	 * Сброс настроек для того чтоб отрисовывалась картинка загрузки
+	 */
+	public void ResetBitmap()
+	{
+		SetBitmap(null);
+		currDay = -1;
+		currentUrl = null;
+	}
+	
+	/**
+	 * Чтение сохраненной картинки из файла
+	 */
 	public void ReadFile()
 	{
-		Log.d(TAG, "Чтение картинки из файла");
+		//Log.d(TAG, "Чтение картинки из файла");
 		
 		FileInputStream stream = null;
 		try 
 		{
-			stream = openFileInput(Constants.FILE_NAME);
-			bm = BitmapFactory.decodeStream(stream);
-			
-			Log.d(TAG, "Считана картинка из файла");
-			
+			//Log.d(TAG, "Считана картинка из файла");
 			SetCurrentUrl(preferences.getString(Constants.LAST_URL, ""));
 			SetCurrentDay(new Date(preferences.getLong(Constants.LAST_UPDATE, 0)).getDate());
 			
+			if(GetCurrentUrl().isEmpty() == false)
+			{
+				stream = openFileInput(Constants.FILE_NAME);
+				bm = BitmapFactory.decodeStream(stream);
+				currentHeight = bm.getHeight();
+				currentWidth = bm.getWidth();
+				//Log.d(TAG, String.format("Ширина: %d, Высота: %d", currentWidth, currentHeight));
+			}
 				
 		} catch (FileNotFoundException e) {
-			Log.d(TAG, "Файл картинки не найден");
+			//Log.d(TAG, "Файл картинки не найден");
 		}
 		finally {
             if (stream != null) try {
@@ -188,9 +269,14 @@ public class Wallpaper extends WallpaperService
 
 	}
 	
+	/**
+	 * Сохранение картинки в файл
+	 * @param bm
+	 * @param url
+	 */
 	public void SaveFile(Bitmap bm, String url)
 	{
-		Log.d(TAG, "Сохранение картинки в файл");
+		//Log.d(TAG, "Сохранение картинки в файл");
 		try 
 		{
 			FileOutputStream fos = openFileOutput(Constants.FILE_NAME, Context.MODE_PRIVATE);
@@ -209,9 +295,120 @@ public class Wallpaper extends WallpaperService
             SetCurrentUrl(url);
 
 		} catch (IOException e) {
-			Log.d(TAG, "Ошибка сохранения картинки");
+			//Log.d(TAG, "Ошибка сохранения картинки");
 		}
 	}
+	
+	/**
+	 * Создание и запуск потока обновления
+	 */
+	public void StartUpdate()
+    {
+    	new Thread(new Runnable() {
+		    public void run() {
+		    	update();
+		    }
+		  }).start();
+    }
+	
+	/**
+	 * Проверка условий ибновления и в случае выполнения загрузка фото,
+	 * установка его текущим и сохранение в файл
+	 */
+	public void update()
+    {
+    	//Log.d(TAG, "Вызов MyEngine.update()");
+    	
+    	try 
+    	{
+    		if(IsOnline() == false)
+    		{
+    			throw new ConnectionException("Нет интернет соединения.");
+    		}
+    		
+        	String url = GetUrl();
+        	if(url == null)
+        	{
+        		throw new ConnectionException("Ошибка получения URL картинки");
+        	}
+        	
+        	if(url.equals(GetCurrentUrl()))
+        	{
+        		//Log.d(TAG, "URL совпадает, еще не обновили");
+        		return;
+        	}
+        	
+        	//Log.d(TAG, "Загрузка картинки по адресу: " + url);
+        	Bitmap bm = imageDownloader.downloadBitmap(url);
+        	if(bm == null)
+        	{
+        		throw new ConnectionException("Ошибка загрузки киртинки");
+        	}
+        	
+    		//Log.d(TAG, "Картинка успешно загружена");
+    		currentHeight = -1;
+    		currentWidth = -1;
+    		SetBitmap(bm);
+    		SaveFile(bm, url);
+    		
+    		for (MyEngine info : engines)
+    		{
+    			//Log.d(TAG, "Вызов drawFrame()");
+    			info.drawFrame();
+    		}
+    	} 
+	    catch (IOException e) {
+	    	//Log.w(TAG, String.format("Ошибка получения URL: %s. Запуск проверяльщика", e.getLocalizedMessage()));
+	    	CheckOnline();
+		}
+    	catch(ConnectionException e){
+    		//Log.w(TAG, String.format("%s. Запуск проверяльщика", e.getMessage()));
+    		CheckOnline();
+    	}
+	    catch(Exception e) {
+	    	//Log.e(TAG, "Неизвестная ошибка обновления: " + e.getLocalizedMessage());
+	    }
+    }
+
+	/**
+	 * Создание и запуск таймера проверки наличия услуги передачи данных
+	 */
+	private void CheckOnline()
+    {
+		//Log.d(TAG, "Создание таймера");
+		
+		try
+		{
+			new Timer().scheduleAtFixedRate(new TimerTask() 
+			{
+				@Override
+				public void run() 
+				{
+					//Log.d(TAG, "Запуск проверки соединения");
+					if(IsOnline() == false)
+					{
+						//Log.d(TAG, "Передача данных отключена");
+						return;
+					}
+					
+					//Log.d(TAG, "Передача данных включена. Остановка таймера проверки соединения");
+					if(cancel())
+					{
+						//Log.d(TAG, "Таймер успешно остановлен");
+					}
+					
+					//Log.d(TAG, "Запуск обновления");
+					StartUpdate();
+				}
+				
+			}, 10000, 10000);
+		}
+		catch(Exception e) {
+	    	//Log.e(TAG, "Неизвестная ошибка: " + e.getLocalizedMessage());
+	    }
+    	
+    	//Log.d(TAG, "Таймер создан и запущен");
+    }
 	
 	class MyEngine extends Engine implements SharedPreferences.OnSharedPreferenceChangeListener
 	{
@@ -219,12 +416,9 @@ public class Wallpaper extends WallpaperService
         private int mPixels;
         private float mXStep;
         private Timer timer = new Timer();
-        private Timer isOnlineChecker = new Timer();
         private int mHeight = -1;
         private int mWidth = -1;
         private Wallpaper wp;
-        private int currentHeight = -1;
-        private int currentWidth = -1;
         //private Rect mRectFrame;
         private boolean mHorizontal;
         private Bitmap download;
@@ -238,9 +432,14 @@ public class Wallpaper extends WallpaperService
         
         private boolean mVisible;
 
+		/**
+		 * Конструктор рисовальщика
+		 * @param service ссылка на сервис обоев
+		 */
         MyEngine(Wallpaper service) 
         {
-        	//Log.d(TAG, "Создание MyEngine");
+        	//Log.i(TAG, "Создание Engine");
+        	
         	final Paint paint = mPaint;
             paint.setColor(0xffffffff);
             paint.setTextSize(30);
@@ -255,123 +454,22 @@ public class Wallpaper extends WallpaperService
         	netUpdates();
         }
         
-        private void netUpdates()
-    	{
-        	//Log.d(TAG, "Создание таймера обновлений");
-        	
-    		timer.scheduleAtFixedRate(new TimerTask() 
-    		{
-    			@Override
-    			public void run() 
-    			{
-    				Log.d(TAG, "Сработал таймер обновления");
-    				int now = new Date(System.currentTimeMillis()).getDate();
-    				if(wp.GetCurrentDay() != now)
-    				{
-    					Log.d(TAG, "Запуск обновления");
-    					update();
-    				}
-    				else
-    				{
-    					Log.d(TAG, String.format("Обновление не нужно. Сейчас: %d, текущий: %d", now, wp.GetCurrentDay()));
-    				}
-    			}
-    			
-    		}, 0, Constants.UPDATE_INTERVAL);
-    		
-    		//Log.d(TAG, "Таймер обновлений запущен");
-    	}
-        
-        private void CheckOnline()
-        {
-        	//Log.d(TAG, "Создание таймера проверки соединения");
-        	
-        	isOnlineChecker.scheduleAtFixedRate(new TimerTask() 
-    		{
-    			@Override
-    			public void run() 
-    			{
-    				Log.d(TAG, "Запуск проверки соединения");
-    				if(IsOnline() == false)
-    				{
-    					Log.d(TAG, "Передача данных отключена");
-    					return;
-    				}
-    				
-    				Log.d(TAG, "Передача данных включена. Остановка таймера проверки соединения");
-    				isOnlineChecker.cancel();
-    				
-    				Log.d(TAG, "Запуск обновления");
-    				update();
-    			}
-    			
-    		}, 1000, 10000);
-        	
-        	//Log.d(TAG, "Таймер проверки соединения запущен");
-        }
-       
-        public void update()
-        {
-        	Log.d(TAG, "Вызов MyEngine.update()");
-        	
-        	try 
-	    	{
-        		if(IsOnline() == false)
-        		{
-        			Log.d(TAG, "Нет интернет соединения. Запуск проверяльщика");
-        			CheckOnline();
-        			return;
-        		}
-        		
-            	String url = GetUrl();
-            	if(url == null)
-            	{
-            		Log.d(TAG, "Ошибка получения URL картинки");
-            		CheckOnline();
-            		return;
-            	}
-            	
-            	if(url.equals(GetCurrentUrl()))
-            	{
-            		Log.d(TAG, "URL совпадает, еще не обновили");
-            		return;
-            	}
-            	
-            	Log.d(TAG, "Загрузка картинки по адресу: " + url);
-            	Bitmap bm = imageDownloader.downloadBitmap(url);
-            	if(bm == null)
-            	{
-            		Log.d(TAG, "Ошибка загрузки киртинки");
-            		CheckOnline();
-            		return;
-            	}
-            	
-        		Log.d(TAG, "Картинка успешно загружена");
-        		currentHeight = -1;
-        		currentWidth = -1;
-        		wp.SetBitmap(bm);
-        		SaveFile(bm, url);
-        		drawFrame();
-	    	} 
-		    catch (IOException e) {
-		    	Log.d(TAG, "Ошибка получения URL: " + e.getLocalizedMessage());
-			}
-		    catch(Exception e) {
-		    	Log.d(TAG, "Ошибка обновления: " + e.getLocalizedMessage());
-		    }
-        }
-
         @Override
         public void onCreate(SurfaceHolder surfaceHolder) 
         {
             super.onCreate(surfaceHolder);
 
+            wp.RegEngine(this);
             //Log.d(TAG, "Вызов MyEngine.onCreate()");
         }
 
         @Override
         public void onDestroy() 
         {
+        	//Log.i(TAG, "Удаление Engine");
+        	
+        	wp.UnregEngine(this);
+        	
         	timer.cancel();
             mHandler.removeCallbacks(drawRunner);
         	if(preferences != null)
@@ -380,7 +478,43 @@ public class Wallpaper extends WallpaperService
         	}
             super.onDestroy();
         }
-
+        
+		/**
+		 * Таймер обновления фотографии. Проверяет смену дня. 
+		 * В случае если наступил след. день запускает обновление.
+		 */
+        private void netUpdates()
+    	{
+        	//Log.d(TAG, "Создание таймера обновлений");
+        	try
+			{
+				timer.scheduleAtFixedRate(new TimerTask() 
+				{
+					@Override
+					public void run() 
+					{
+						//Log.d(TAG, "Сработал таймер обновления");
+						int now = new Date(System.currentTimeMillis()).getDate();
+						if(wp.GetCurrentDay() != now)
+						{
+							//Log.d(TAG, "Запуск обновления");
+							wp.StartUpdate();
+						}
+						else
+						{
+							//Log.d(TAG, String.format("Обновление не нужно. Сейчас: %d, текущий: %d", now, wp.GetCurrentDay()));
+						}
+					}
+					
+				}, 0, Constants.UPDATE_INTERVAL);
+			}
+			catch(Exception e) {
+				//Log.e(TAG, "Неизвестная ошибка: " + e.getLocalizedMessage());
+			}
+    		
+    		//Log.d(TAG, "Таймер обновлений запущен");
+    	}
+       
         @Override
         public void onVisibilityChanged(boolean visible) 
         {
@@ -430,7 +564,7 @@ public class Wallpaper extends WallpaperService
             drawFrame();
         }
 
-        /*
+        /**
          * Draw one frame of the animation. This method gets called repeatedly
          * by posting a delayed Runnable. You can do any drawing you want in
          * here. This example draws a wireframe cube.
@@ -470,7 +604,7 @@ public class Wallpaper extends WallpaperService
                 	
                 	if(mHeight != currentHeight || mWidth != currentWidth)
                 	{
-                		//Log.d(TAG, "Изменились размеры, изменяем размер");
+                		//Log.d(TAG, String.format("Изменились размеры, изменяем размер: %d->%d, %d->%d", currentHeight, mHeight, currentWidth, mWidth));
                 		double rescaling = (double)mHeight / bm.getHeight();
                 		if(mHorizontal)
                 		{
@@ -490,8 +624,8 @@ public class Wallpaper extends WallpaperService
                 	{
 	                	float step1 = mWidth * mXStep;
 	                	float step2 = (bm.getWidth() - mWidth) * mXStep;
-	                	float d = step2 / step1;
-	                	c.translate((float)mPixels * d, 0f);
+	                	float dX = (float)mPixels * (step2 / step1);
+	                	c.translate(dX, 0f);
                 	}
                 	
                 	if(mHorizontal)
@@ -501,13 +635,13 @@ public class Wallpaper extends WallpaperService
                 }
             } finally {
                 if (c != null) holder.unlockCanvasAndPost(c);
-            }
-
-            // Reschedule the next redraw
-            mHandler.removeCallbacks(drawRunner);
-            if (mVisible) 
-            {
-                //mHandler.postDelayed(drawRunner, 1000 / 25);
+                
+                // Reschedule the next redraw
+                mHandler.removeCallbacks(drawRunner);
+                if (mVisible) 
+                {
+                    //mHandler.postDelayed(drawRunner, 1000);
+                }
             }
         }
         
@@ -537,15 +671,17 @@ public class Wallpaper extends WallpaperService
 			if(arg1.equals("sources"))
 			{
 				String value = prefs.getString("sources", "0");
-				Log.d(TAG, "Настройки изменились значение: " + value);
+				//Log.d(TAG, "Настройки изменились значение: " + value);
 			
 				if(SetCurrentParser(Integer.decode(value)))
 				{
-					new Thread(new Runnable() {
-					    public void run() {
-					    	update();
-					    }
-					  }).start();
+					// сброс времени последнего обновления
+			        SharedPreferences.Editor editor = preferences.edit();
+			        editor.putLong(Constants.LAST_UPDATE, 0);
+			        editor.putString(Constants.LAST_URL, "");
+			        editor.commit();
+			        
+					wp.StartUpdate();
 				}
 			}
 		}
