@@ -3,6 +3,9 @@ package hram.android.PhotoOfTheDay;
 import hram.android.PhotoOfTheDay.Exceptions.ConnectionException;
 import hram.android.PhotoOfTheDay.Parsers.BaseParser;
 import hram.android.PhotoOfTheDay.Parsers.Flickr;
+import hram.android.PhotoOfTheDay.Parsers.Nasa;
+import hram.android.PhotoOfTheDay.Parsers.NationalGeographic;
+import hram.android.PhotoOfTheDay.Parsers.Wikipedia;
 import hram.android.PhotoOfTheDay.Parsers.Yandex;
 
 import java.io.FileInputStream;
@@ -29,7 +32,6 @@ import android.net.ConnectivityManager;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
 import android.util.DisplayMetrics;
-import android.util.Log;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceHolder;
@@ -215,6 +217,15 @@ public class Wallpaper extends WallpaperService
 		case 2:
 			parser = new Flickr();
 			break;
+		case 3:
+			parser = new NationalGeographic();
+			break;
+		case 4:
+			parser = new Nasa();
+			break;
+		case 5:
+			parser = new Wikipedia();
+			break;
 		default:
 			//Log.i(TAG, "Создание парсера по умолчанию");
 			parser = new Yandex();
@@ -245,14 +256,21 @@ public class Wallpaper extends WallpaperService
 		FileInputStream stream = null;
 		try 
 		{
-			//Log.d(TAG, "Считана картинка из файла");
+			long lastUpdate = preferences.getLong(Constants.LAST_UPDATE, 0);
+			if(lastUpdate == 0)
+			{
+				return;
+			}
+			
 			SetCurrentUrl(preferences.getString(Constants.LAST_URL, ""));
-			SetCurrentDay(new Date(preferences.getLong(Constants.LAST_UPDATE, 0)).getDate());
+			SetCurrentDay(new Date(lastUpdate).getDate());
 			
 			if(GetCurrentUrl().isEmpty() == false)
 			{
 				stream = openFileInput(Constants.FILE_NAME);
 				bm = BitmapFactory.decodeStream(stream);
+				//Log.d(TAG, "Считана картинка из файла");
+				
 				currentHeight = bm.getHeight();
 				currentWidth = bm.getWidth();
 				//Log.d(TAG, String.format("Ширина: %d, Высота: %d", currentWidth, currentHeight));
