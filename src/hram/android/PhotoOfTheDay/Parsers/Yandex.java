@@ -10,6 +10,11 @@ import android.util.Log;
 
 public class Yandex extends BaseParser 
 {	
+	public Yandex()
+	{
+		//Log.i(TAG, "Создание парсера Yandex");
+	}
+	
 	@Override
 	public String GetUrl() throws IOException
 	{

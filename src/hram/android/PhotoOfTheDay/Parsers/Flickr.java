@@ -11,6 +11,11 @@ import android.util.Log;
 
 public class Flickr extends BaseParser 
 {	
+	public Flickr()
+	{
+		//Log.i(TAG, "Создание парсера Flickr");
+	}
+	
 	@Override
 	public String GetUrl() throws IOException 
 	{
