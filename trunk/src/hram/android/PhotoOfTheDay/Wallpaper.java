@@ -265,7 +265,7 @@ public class Wallpaper extends WallpaperService
 			SetCurrentUrl(preferences.getString(Constants.LAST_URL, ""));
 			SetCurrentDay(new Date(lastUpdate).getDate());
 			
-			if(GetCurrentUrl().isEmpty() == false)
+			if(GetCurrentUrl().length() > 0)
 			{
 				stream = openFileInput(Constants.FILE_NAME);
 				bm = BitmapFactory.decodeStream(stream);
@@ -683,7 +683,6 @@ public class Wallpaper extends WallpaperService
         	}
         }
 
-		@Override
 		public void onSharedPreferenceChanged(SharedPreferences prefs, String arg1) 
 		{
 			if(arg1.equals("sources"))
