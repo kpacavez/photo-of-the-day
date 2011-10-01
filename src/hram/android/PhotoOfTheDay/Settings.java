@@ -33,7 +33,6 @@ public class Settings  extends PreferenceActivity  implements SharedPreferences.
         super.onDestroy();
     }
 
-	@Override
 	public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) 
 	{
 		
