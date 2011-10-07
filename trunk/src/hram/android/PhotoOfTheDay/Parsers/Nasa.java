@@ -34,4 +34,9 @@ public class Nasa extends BaseParser
 		return "http://apod.nasa.gov/apod/" + src.attr("src");
 	}
 
+	@Override
+	public boolean IsTagSupported() 
+	{
+		return false;
+	}
 }

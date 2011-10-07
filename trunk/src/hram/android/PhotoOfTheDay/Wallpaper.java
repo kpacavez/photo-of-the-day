@@ -9,7 +9,6 @@ import hram.android.PhotoOfTheDay.Parsers.Wikipedia;
 import hram.android.PhotoOfTheDay.Parsers.Yandex;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -29,13 +28,16 @@ import android.graphics.Paint;
 import android.graphics.Paint.Align;
 import android.graphics.Rect;
 import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Handler;
 import android.service.wallpaper.WallpaperService;
 import android.util.DisplayMetrics;
+//import android.util.Log;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 public class Wallpaper extends WallpaperService 
 {
@@ -44,6 +46,7 @@ public class Wallpaper extends WallpaperService
 	private final ImageDownloader imageDownloader = new ImageDownloader();
 	private List<MyEngine> engines = new ArrayList<MyEngine>();
 	private Lock l = new ReentrantLock();
+	private NetworkInfo mWifi;
 	
 	private int currDay = -1;
 	private Bitmap bm;
@@ -61,6 +64,9 @@ public class Wallpaper extends WallpaperService
 		
 		// настройки
 		preferences = getSharedPreferences(Constants.SETTINGS_NAME, 0);
+		
+		ConnectivityManager connManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+		mWifi = connManager.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
 		
 		SetCurrentParser(Integer.decode(preferences.getString(Constants.SOURCES_NAME, "1")));
 		
@@ -178,6 +184,15 @@ public class Wallpaper extends WallpaperService
 		return false;
 	}
 	
+	public boolean IsWiFiEnabled()
+	{
+		boolean wifiOnly = preferences.getBoolean(Constants.WIFI_ONLY, false);
+		
+		//Log.d(TAG, String.format("Только через WiFi %s", wifiOnly ? "Вкл" : "Откл"));
+		
+		return wifiOnly ? mWifi.isConnected() : true;
+	}
+	
 	/**
 	 * Возвращает урл картинки дня
 	 * @return
@@ -212,10 +227,10 @@ public class Wallpaper extends WallpaperService
 		
 		switch (value) {
 		case 1:
-			parser = new Yandex();
+			parser = new Yandex(this, preferences);
 			break;
 		case 2:
-			parser = new Flickr();
+			parser = new Flickr(this, preferences);
 			break;
 		case 3:
 			parser = new NationalGeographic();
@@ -228,7 +243,7 @@ public class Wallpaper extends WallpaperService
 			break;
 		default:
 			//Log.i(TAG, "Создание парсера по умолчанию");
-			parser = new Yandex();
+			parser = new Yandex(this, preferences);
 			break;
 		}
 		
@@ -276,8 +291,10 @@ public class Wallpaper extends WallpaperService
 				//Log.d(TAG, String.format("Ширина: %d, Высота: %d", currentWidth, currentHeight));
 			}
 				
-		} catch (FileNotFoundException e) {
-			//Log.d(TAG, "Файл картинки не найден");
+		}
+		catch (Exception e) {
+			//Log.d(TAG, "Не известная ошибка");
+			ResetBitmap();
 		}
 		finally {
             if (stream != null) try {
@@ -469,7 +486,6 @@ public class Wallpaper extends WallpaperService
             
         	wp = service;
         	download = BitmapFactory.decodeResource(getResources(),  R.drawable.download);
-        	netUpdates();
         }
         
         @Override
@@ -479,6 +495,8 @@ public class Wallpaper extends WallpaperService
 
             wp.RegEngine(this);
             //Log.d(TAG, "Вызов MyEngine.onCreate()");
+            
+            netUpdates();
         }
 
         @Override
@@ -512,6 +530,14 @@ public class Wallpaper extends WallpaperService
 					public void run() 
 					{
 						//Log.d(TAG, "Сработал таймер обновления");
+						if(IsNeedDownloadEveryUpdate())
+						{
+							//Log.d(TAG, "Запуск периодического обновления");
+							wp.StartUpdate();
+							return;
+						}
+
+						//Log.d(TAG, "Проверка времени последнего обновления");
 						int now = new Date(System.currentTimeMillis()).getDate();
 						if(wp.GetCurrentDay() != now)
 						{
@@ -533,6 +559,57 @@ public class Wallpaper extends WallpaperService
     		//Log.d(TAG, "Таймер обновлений запущен");
     	}
        
+        
+        private boolean IsNeedDownloadEveryUpdate()
+        {
+        	try
+        	{
+	        	//Log.d(TAG, "если это превью то не обновляем по таймеру");
+	        	if(isPreview())
+	        	{
+	        		//Log.d(TAG, "это превью не обновляем по таймеру");
+	        		return false;
+	        	}
+	        	
+	        	//Log.d(TAG, "если парсер не поддерживает"); 
+	        	if(parser.IsTagSupported() == false)
+	        	{
+	        		//Log.d(TAG, "парсер не поддерживает");
+	        		return false;
+	        	}
+	        	
+	        	//Log.d(TAG, "если не включена работа по тегам");
+	        	if(preferences.getBoolean("tagPhotoEnable", false) == false)
+	    		{
+	        		//Log.d(TAG, "не включена работа по тегам");
+	        		return false;
+	    		}
+	        	
+	        	//Log.d(TAG, "если опция периодического обновления не включена"); 
+	        	if(preferences.getBoolean("downloadEveryUpdate", false) == false)
+	        	{
+	        		//Log.d(TAG, "опция периодического обновления не включена");
+	        		return false;
+	        	}
+	        	
+	        	//Log.d(TAG, "если тег не введен");
+	        	String tag = preferences.getString("tagPhotoValue", "");
+	        	if(tag.length() == 0)
+	        	{
+	        		//Log.d(TAG, "тег не введен");
+	        		return false;
+	        	}
+        	}
+        	catch(Exception e)
+        	{
+        		//Log.e(TAG, e.getMessage());
+        		return false;
+        	}
+        	
+        	//Log.d(TAG, "надо обновлять");
+        	return true;
+        }
+        
         @Override
         public void onVisibilityChanged(boolean visible) 
         {
@@ -685,22 +762,55 @@ public class Wallpaper extends WallpaperService
 
 		public void onSharedPreferenceChanged(SharedPreferences prefs, String arg1) 
 		{
-			if(arg1.equals("sources"))
+			if(isPreview() == false)
 			{
-				String value = prefs.getString("sources", "0");
-				//Log.d(TAG, "Настройки изменились значение: " + value);
+				return;
+			}
 			
+			//Log.d(TAG, "Изменено " +  arg1);
+			String tag = prefs.getString("tagPhotoValue", "");
+			if(arg1.equals("tagPhotoEnable") && parser.IsTagSupported())
+			{
+				if(prefs.getBoolean(arg1, false) && tag.length() == 0)
+				{
+					return;
+				}
+				
+				StartUpdate();
+			}
+			if(arg1.equals("tagPhotoValue") && parser.IsTagSupported() && tag.length() > 0)
+			{
+		        StartUpdate();
+			}
+			else if(arg1.equals("sources"))
+			{
+				String value = prefs.getString(arg1, "0");
+				
 				if(SetCurrentParser(Integer.decode(value)))
 				{
-					// сброс времени последнего обновления
-			        SharedPreferences.Editor editor = preferences.edit();
-			        editor.putLong(Constants.LAST_UPDATE, 0);
-			        editor.putString(Constants.LAST_URL, "");
-			        editor.commit();
-			        
-					wp.StartUpdate();
+					StartUpdate();
 				}
 			}
+		}
+		
+		private void StartUpdate()
+		{
+			if(wp.IsWiFiEnabled() == false)
+			{
+				return;
+			}
+			
+			Toast.makeText(wp, getString(R.string.updateStarted), Toast.LENGTH_SHORT).show();
+			
+			wp.ResetBitmap();
+			
+			// сброс времени последнего обновления
+	        SharedPreferences.Editor editor = preferences.edit();
+	        editor.putLong(Constants.LAST_UPDATE, 0);
+	        editor.putString(Constants.LAST_URL, "");
+	        editor.commit();
+	        
+			wp.StartUpdate();
 		}
 	}
 }

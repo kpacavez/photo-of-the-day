@@ -35,4 +35,9 @@ public class NationalGeographic extends BaseParser
 		return src.attr("src");
 	}
 
+	@Override
+	public boolean IsTagSupported() 
+	{
+		return false;
+	}
 }

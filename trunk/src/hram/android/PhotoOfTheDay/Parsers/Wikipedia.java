@@ -43,4 +43,9 @@ public class Wikipedia extends BaseParser {
 		return null;
 	}
 
+	@Override
+	public boolean IsTagSupported() 
+	{
+		return false;
+	}
 }
