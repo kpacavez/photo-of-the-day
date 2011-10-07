@@ -5,16 +5,12 @@
         <item>fotki.yandex.ru</item>
         <item>flickr.com</item>
         <item>nationalgeographic.com</item>
-        <item>nasa.gov</item>
-        <item>wikipedia.org</item>
     </string-array>
 
     <string-array name="sourcesValues">
         <item>1</item>
         <item>2</item>
         <item>3</item>
-        <item>4</item>
-        <item>5</item>
     </string-array>
     
 </resources>
