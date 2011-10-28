@@ -18,4 +18,5 @@
     <string name="sourcesSettings">Sources settings</string>
     <string name="networkSettings">Network settings</string>
     <string name="updateStarted">Download image started.</string>
+    <string name="setupDescription">"Choose 'Photo of the day'\r\n from the list."</string>
 </resources>

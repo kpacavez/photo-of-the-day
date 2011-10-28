@@ -18,4 +18,5 @@
     <string name="sourcesSettings">Настройки источников обоев</string>
     <string name="networkSettings">Сетевые настройки</string>
     <string name="updateStarted">Процесс загрузки фотографии запущен</string>
+    <string name="setupDescription">"Выберите 'Фото дня'\r\n в списке программ"</string>
 </resources>
